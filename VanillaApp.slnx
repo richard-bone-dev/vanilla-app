@@ -1,2 +1,6 @@
 <Solution>
+  <Project Path="Vanilla.Api.Tests/Vanilla.Api.Tests.csproj" />
+  <Project Path="Vanilla.Api/Vanilla.Api.csproj" />
+  <Project Path="Vanilla.AppHost/Vanilla.AppHost.csproj" />
+  <Project Path="Vanilla.ServiceDefaults/Vanilla.ServiceDefaults.csproj" />
 </Solution>

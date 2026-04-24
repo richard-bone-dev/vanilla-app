@@ -1,0 +1,36 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Vanilla.Api/Dockerfile
+    depends_on:
+      - sqlserver
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__SqlServer: Server=sqlserver,1433;Database=VanillaApp;User Id=sa;Password=${SQLSERVER_SA_PASSWORD};Encrypt=False;TrustServerCertificate=True
+      Encryption__FieldKey: ${FIELD_ENCRYPTION_KEY}
+    ports:
+      - "127.0.0.1:${API_PORT:-12345}:8080"
+    networks:
+      - edge
+      - backend
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SQLSERVER_SA_PASSWORD}
+    networks:
+      - backend
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+
+networks:
+  edge:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true
+
+volumes:
+  sqlserver-data:
