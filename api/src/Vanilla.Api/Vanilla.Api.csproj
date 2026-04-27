@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <UserSecretsId>9ca7c985-3332-473f-a939-e56129c82b5b</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Vanilla.Application\Vanilla.Application.csproj" />
+    <ProjectReference Include="..\Vanilla.Infrastructure\Vanilla.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
