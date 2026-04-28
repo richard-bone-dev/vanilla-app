@@ -14,7 +14,7 @@ RUN dotnet restore "api/src/Vanilla.Api/Vanilla.Api.csproj" --configfile /src/Nu
 COPY . .
 
 WORKDIR /src/api/src/Vanilla.Api
-RUN dotnet publish "Vanilla.Api.csproj" -c Release -o /app/publish --no-restore
+RUN dotnet publish "Vanilla.Api.csproj" -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app

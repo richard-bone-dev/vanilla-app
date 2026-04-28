@@ -8,4 +8,9 @@
     <ProjectReference Include="..\Vanilla.Application\Vanilla.Application.csproj" />
     <ProjectReference Include="..\Vanilla.Infrastructure\Vanilla.Infrastructure.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Scalar.AspNetCore" />
+  </ItemGroup>
 </Project>
