@@ -1,4 +1,8 @@
 <Solution>
-  <Project Path="api/tests/Vanilla.Api.Tests/Vanilla.Api.Tests.csproj" />
-  <Project Path="api/src/Vanilla.Api/Vanilla.Api.csproj" />
+  <Project Path="api/src/Vanilla.Api/Vanilla.Api.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
+  <Project Path="api/tests/Vanilla.Api.Tests/Vanilla.Api.Tests.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
 </Solution>
