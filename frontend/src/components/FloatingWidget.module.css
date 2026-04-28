@@ -1,0 +1,82 @@
+.wrapper {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 8000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-lg);
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+
+.fab:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+}
+
+.fab:active {
+  transform: scale(0.95);
+}
+
+.fabActive {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.fabActive:hover {
+  background: var(--bg-hover);
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  min-width: 160px;
+  animation: slideUp 200ms ease;
+}
+
+.menuItem {
+  padding: 14px 20px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.menuItem:hover {
+  background: var(--bg-hover);
+}
+
+.menuItem + .menuItem {
+  border-top: 1px solid var(--border-subtle);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

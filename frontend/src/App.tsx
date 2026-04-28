@@ -1,11 +1,26 @@
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ToastProvider } from "./hooks/useToast";
+import { ToastContainer } from "./components/ToastContainer";
+import { FloatingWidget } from "./components/FloatingWidget";
+import { QuickEntryPage } from "./pages/QuickEntryPage";
+import { DashboardPage } from "./pages/DashboardPage";
+import { CustomersPage } from "./pages/CustomersPage";
+import { CustomerLedgerPage } from "./pages/CustomerLedgerPage";
+import "./index.css";
+
 export function App() {
   return (
-    <main style={{ fontFamily: "Segoe UI, sans-serif", margin: "3rem auto", maxWidth: 720 }}>
-      <h1>Vanilla React Frontend</h1>
-      <p>
-        This placeholder keeps the frontend slot in the Aspire solution while the backend runs
-        through Aspire or Docker.
-      </p>
-    </main>
+    <BrowserRouter>
+      <ToastProvider>
+        <ToastContainer />
+        <Routes>
+          <Route path="/" element={<QuickEntryPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/customers/:id/ledger" element={<CustomerLedgerPage />} />
+        </Routes>
+        <FloatingWidget />
+      </ToastProvider>
+    </BrowserRouter>
   );
 }

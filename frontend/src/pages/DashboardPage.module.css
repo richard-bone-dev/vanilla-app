@@ -1,0 +1,131 @@
+.page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+  padding: 4px 0;
+}
+
+.backBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.backBtn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.icon {
+  color: var(--accent);
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.loading {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 48px 16px;
+  font-size: 0.9375rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cardWide {
+  grid-column: 1 / -1;
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  text-align: center;
+}
+
+.cardIcon {
+  color: var(--accent);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cardLabel {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cardValue {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.cardValueLarge {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-top: 4px;
+}
+
+.nav {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.navItem:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-default);
+}

@@ -1,0 +1,227 @@
+.page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  padding: 4px 0;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bolt {
+  color: var(--accent);
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.settingsBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.settingsBtn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.toggleGroup {
+  display: flex;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  padding: 4px;
+  gap: 4px;
+}
+
+.toggleBtn {
+  flex: 1;
+  padding: 10px 0;
+  border-radius: var(--radius-full);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.toggleBtn:hover:not(.toggleActive) {
+  color: var(--text-primary);
+}
+
+.toggleActive {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.amountWrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0 20px;
+  height: 72px;
+  transition: border-color var(--transition-fast);
+}
+
+.amountWrapper:focus-within {
+  border-color: var(--accent);
+}
+
+.currency {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.amountInput {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 2rem;
+  font-weight: 600;
+  text-align: right;
+  outline: none;
+  letter-spacing: -0.02em;
+}
+
+.amountInput::placeholder {
+  color: var(--text-muted);
+}
+
+.noteWrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0 16px;
+  height: 48px;
+  transition: border-color var(--transition-fast);
+}
+
+.noteWrapper:focus-within {
+  border-color: var(--accent);
+}
+
+.noteInput {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.noteInput::placeholder {
+  color: var(--text-muted);
+}
+
+.noteIcon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.saveBtn {
+  width: 100%;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+  margin-top: 8px;
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.saveBtn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modalTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding-right: 32px;
+}
+
+.modalText {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.btnPrimary {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  transition: background var(--transition-fast);
+}
+
+.btnPrimary:hover {
+  background: var(--accent-hover);
+}
+
+.btnSecondary {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.btnSecondary:hover {
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
