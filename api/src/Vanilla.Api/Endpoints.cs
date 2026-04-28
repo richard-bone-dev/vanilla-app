@@ -6,6 +6,20 @@ public static class Endpoints
 {
     public static IEndpointRouteBuilder MapLedgerApi(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapGet("/", () => Results.Ok(new
+        {
+            service = "Vanilla.Api",
+            status = "running",
+            health = "/health",
+            apiBase = "/api"
+        }));
+
+        endpoints.MapGet("/health", () => Results.Ok(new
+        {
+            status = "healthy",
+            service = "Vanilla.Api"
+        }));
+
         var group = endpoints.MapGroup("/api");
 
         group.MapGet("/customers/search", async (string? query, LedgerApplicationService service, CancellationToken cancellationToken) =>

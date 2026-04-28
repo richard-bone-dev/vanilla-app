@@ -5,10 +5,14 @@ services:
       dockerfile: api/src/Vanilla.Api/Dockerfile
     depends_on:
       - sqlserver
+    ports:
+      - "8080:8080"
     environment:
-      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      #ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_ENVIRONMENT: Development
+      DOTNET_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__DefaultConnection: ${ConnectionStrings__DefaultConnection}      
+      ConnectionStrings__DefaultConnection: ${ConnectionStrings__DefaultConnection:-Server=sqlserver;User Id=sa;Password=${SQLSERVER_SA_PASSWORD};Database=VanillaDb;Encrypt=false;TrustServerCertificate=true}
       Database__Provider: SqlServer
       Encryption__FieldKey: ${FIELD_ENCRYPTION_KEY}
     networks:
