@@ -364,4 +364,3 @@ FodyWeavers.xsd
 /.dotnet/.dotnet
 /package-lock.json
 /.env
-/.env
