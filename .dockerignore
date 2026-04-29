@@ -1,0 +1,14 @@
+**/.git
+**/.gitignore
+**/bin
+**/obj
+**/.vs
+**/.vscode
+**/node_modules
+**/.nuget
+**/.env
+**/.env.local
+**/docker-compose.override.yml
+**/.DS_Store
+**/*.log
+**/Thumbs.db
