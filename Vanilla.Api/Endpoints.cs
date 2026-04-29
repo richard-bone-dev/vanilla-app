@@ -6,6 +6,9 @@ public static class Endpoints
 {
     public static IEndpointRouteBuilder MapLedgerApi(this IEndpointRouteBuilder endpoints)
     {
+        // Root health check endpoint
+        endpoints.MapGet("/", () => Results.Ok(new { status = "healthy", service = "Vanilla API" }));
+
         var group = endpoints.MapGroup("/api");
 
         group.MapGet("/customers/search", async (
