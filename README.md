@@ -19,6 +19,8 @@ The React frontend folder is still present in the workspace and can continue to 
 2. Run `docker compose up --build`.
 3. Reach the API on `http://127.0.0.1:12345`.
 
+`FIELD_ENCRYPTION_KEY` can be any non-empty secret string. The API does not expect raw AES bytes, hex, or Base64 specifically. It UTF-8 encodes the configured string, hashes it with SHA-256, and uses that 32-byte hash as the AES-GCM key, so a long random secret is the safest choice.
+
 Important network decisions:
 
 - The API is the only published container port and it is bound to `127.0.0.1` only.

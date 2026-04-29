@@ -21,11 +21,11 @@ public static class AppConfiguration
 
     public static string GetRequiredEncryptionKey(IConfiguration configuration, IHostEnvironment environment)
     {
-        var key = configuration["Encryption:FieldKey"] ?? configuration["FIELD_ENCRYPTION_KEY"];
+        var key = configuration["FIELD_ENCRYPTION_KEY"] ?? configuration["Encryption:FieldKey"];
 
         if (!string.IsNullOrWhiteSpace(key))
         {
-            return key;
+            return key.Trim();
         }
 
         if (environment.IsEnvironment("Test"))
@@ -33,6 +33,6 @@ public static class AppConfiguration
             return "test-encryption-key";
         }
 
-        throw new InvalidOperationException("Encryption__FieldKey or FIELD_ENCRYPTION_KEY must be configured outside the Test environment.");
+        throw new InvalidOperationException("FIELD_ENCRYPTION_KEY must be configured outside the Test environment. Legacy Encryption__FieldKey is also supported.");
     }
 }
