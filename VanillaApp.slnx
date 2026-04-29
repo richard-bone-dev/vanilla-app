@@ -5,4 +5,6 @@
   <Project Path="api/tests/Vanilla.Api.Tests/Vanilla.Api.Tests.csproj">
     <Build Solution="Debug|*" Project="false" />
   </Project>
+  <Project Path="host/Vanilla.AppHost/Vanilla.AppHost.csproj" />
+  <Project Path="host/Vanilla.ServiceDefaults/Vanilla.ServiceDefaults.csproj" />
 </Solution>
