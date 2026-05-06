@@ -9,7 +9,9 @@ public static class AppConfiguration
     {
         var connectionString = string.Equals(provider, "Sqlite", StringComparison.OrdinalIgnoreCase)
             ? configuration.GetConnectionString("Sqlite")
-            : configuration.GetConnectionString("SqlServer") ?? configuration.GetConnectionString("appdb");
+            : configuration.GetConnectionString("DefaultConnection")
+                ?? configuration.GetConnectionString("SqlServer")
+                ?? configuration.GetConnectionString("appdb");
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -38,4 +40,12 @@ public static class AppConfiguration
 
     public static bool IsApiDocsEnabled(IConfiguration configuration, IHostEnvironment environment) =>
         environment.IsDevelopment() || configuration.GetValue<bool>("ApiDocs:Enabled");
+
+    public static string[] GetAllowedCorsOrigins(IConfiguration configuration) =>
+        configuration.GetSection("Cors:AllowedOrigins")
+            .Get<string[]>()?
+            .Where(origin => !string.IsNullOrWhiteSpace(origin))
+            .Select(origin => origin.Trim())
+            .ToArray()
+        ?? [];
 }

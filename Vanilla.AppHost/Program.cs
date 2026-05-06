@@ -12,6 +12,6 @@ var database = sqlServer.AddDatabase("appdb");
 var api = builder.AddProject<Projects.Vanilla_Api>("api")
     .WithReference(database)
     .WaitFor(database)
-    .WithEnvironment("Encryption__FieldKey", encryptionKey);
+    .WithEnvironment("FIELD_ENCRYPTION_KEY", encryptionKey);
 
 builder.Build().Run();

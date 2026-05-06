@@ -14,6 +14,19 @@ builder.Logging.AddSimpleConsole();
 builder.AddServiceDefaults();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendDev", policy =>
+    {
+        var allowedOrigins = AppConfiguration.GetAllowedCorsOrigins(builder.Configuration);
+        if (allowedOrigins.Length > 0)
+        {
+            policy.WithOrigins(allowedOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        }
+    });
+});
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<IFieldEncryptionService>(_ =>
     new AesGcmFieldEncryptionService(AppConfiguration.GetRequiredEncryptionKey(builder.Configuration, builder.Environment)));
@@ -48,13 +61,15 @@ var apiDocsEnabled = AppConfiguration.IsApiDocsEnabled(app.Configuration, app.En
 
 await DatabaseInitializer.InitializeAsync(app.Services);
 
+app.UseCors("FrontendDev");
+
 app.MapLedgerApi();
 app.MapDefaultEndpoints();
 
 if (apiDocsEnabled)
 {
     app.MapOpenApi();
-    app.MapScalarApiReference("/docs", options => options
+    app.MapScalarApiReference("/scalar/v1", options => options
         .WithTitle("Vanilla API Reference")
         .WithOpenApiRoutePattern("/openapi/{documentName}.json"));
 }

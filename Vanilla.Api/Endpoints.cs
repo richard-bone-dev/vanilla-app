@@ -13,7 +13,7 @@ public static class Endpoints
                 "/health",
                 "/api",
                 AppConfiguration.IsApiDocsEnabled(configuration, environment) ? "/openapi/v1.json" : null,
-                AppConfiguration.IsApiDocsEnabled(configuration, environment) ? "/docs" : null)))
+                AppConfiguration.IsApiDocsEnabled(configuration, environment) ? "/scalar/v1" : null)))
             .WithName("GetApiRoot")
             .WithTags("Infrastructure")
             .WithSummary("Returns the API status and documentation routes.")
