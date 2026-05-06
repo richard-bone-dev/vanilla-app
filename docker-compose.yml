@@ -11,7 +11,8 @@ services:
       ConnectionStrings__DefaultConnection: ${ConnectionStrings__DefaultConnection}
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
     ports:
-      - "127.0.0.1:${API_PORT:-12345}:12345"
+      # API is intentionally host-accessible for local/Tailscale development.
+      - "${API_PORT:-12345}:12345"
     networks:
       - edge
       - backend
@@ -22,7 +23,9 @@ services:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${SQLSERVER_SA_PASSWORD}
     ports:
-      - "1433:1433"
+      # SQL Server is intentionally bound to 127.0.0.1 for SSMS development access only.
+      # In production/private mode, remove this ports block entirely.
+      - "127.0.0.1:1433:1433"
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" || exit 1"]
       interval: 10s
@@ -31,6 +34,8 @@ services:
       start_period: 90s
     networks:
       - backend
+      # SQL also joins edge so Docker can publish the loopback-only SSMS port.
+      - edge
     volumes:
       - sqlserver-data:/var/opt/mssql
 
