@@ -41,40 +41,54 @@ Docker networking is standardized as:
 - Docker publishes `127.0.0.1:12345` on the host to container port `12345`.
 - SQL Server listens on `1433` inside the container and is published to `127.0.0.1:1433`.
 
-## Frontend dev integration
+## Frontend demo UI
 
-The frontend Vite dev server runs on `http://localhost:5173`.
+The official demo UI lives in `frontend/`. It is a static-only HTML/CSS/JavaScript app with no Node build system, no `package.json`, and no `.csproj`.
 
-Create `frontend/.env.local` from `frontend/.env.example` if you want to override the API base URL explicitly:
-
-```powershell
-Copy-Item frontend/.env.example frontend/.env.local
-```
-
-By default, the frontend dev client targets `http://localhost:12345`, and the API CORS policy allows `http://localhost:5173`.
-
-## Visual Studio and frontend workflow
-
-Use Visual Studio Folder View for the full repository so the `frontend/` Vite/React app remains visible as a normal repo folder. The frontend is not a .NET project, does not need a `.csproj`, and should stay inside this repository at `frontend/`.
-
-Run the API from Visual Studio using the existing API project. The API launch profile is pinned to:
+Use Visual Studio Folder View for the full repository so `frontend/` remains visible as a normal repo folder. Run the API from Visual Studio using the existing API project. The API launch profile is pinned to:
 
 ```text
 http://localhost:12345
 ```
 
-Run the frontend from a terminal:
+For API integration, serve the frontend locally:
 
 ```powershell
-cd frontend
-npm run dev
+powershell -ExecutionPolicy Bypass -File .\frontend\serve.ps1
 ```
 
-The frontend dev server runs at:
+Then open:
 
 ```text
 http://localhost:5173
 ```
+
+For UI-only checks, the frontend can also be opened directly:
+
+```powershell
+Start-Process .\frontend\index.html
+```
+
+Direct file opening may not use the same browser origin as the API CORS configuration, so use the local static server when testing API calls.
+
+The frontend URL is:
+
+```text
+http://localhost:5173
+```
+
+The static frontend reads its API base URL from `frontend/config.js`:
+
+```javascript
+window.VANILLA_API_BASE_URL = "http://localhost:12345";
+```
+
+Useful local endpoints:
+
+- API: `http://localhost:12345`
+- OpenAPI: `http://localhost:12345/openapi/v1.json`
+- Scalar: `http://localhost:12345/scalar/v1`
+- Health: `http://localhost:12345/health`
 
 ## Docs and health
 
