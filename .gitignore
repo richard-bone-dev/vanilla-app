@@ -364,3 +364,9 @@ FodyWeavers.xsd
 /.dotnet/.dotnet
 /package-lock.json
 /.env
+
+# Frontend local/generated files
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env.local

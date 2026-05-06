@@ -53,6 +53,29 @@ Copy-Item frontend/.env.example frontend/.env.local
 
 By default, the frontend dev client targets `http://localhost:12345`, and the API CORS policy allows `http://localhost:5173`.
 
+## Visual Studio and frontend workflow
+
+Use Visual Studio Folder View for the full repository so the `frontend/` Vite/React app remains visible as a normal repo folder. The frontend is not a .NET project, does not need a `.csproj`, and should stay inside this repository at `frontend/`.
+
+Run the API from Visual Studio using the existing API project. The API launch profile is pinned to:
+
+```text
+http://localhost:12345
+```
+
+Run the frontend from a terminal:
+
+```powershell
+cd frontend
+npm run dev
+```
+
+The frontend dev server runs at:
+
+```text
+http://localhost:5173
+```
+
 ## Docs and health
 
 OpenAPI JSON is exposed at:
