@@ -1,5 +1,19 @@
 namespace Vanilla.Api;
 
+public sealed record ApiRootResponse(
+    string Service,
+    string Status,
+    string Health,
+    string ApiBase,
+    string? OpenApi,
+    string? Docs);
+
+public sealed record CreatedEntryEnvelope(
+    CreatedItemResponse CreatedItem,
+    CustomerSummaryResponse Customer,
+    decimal ResultingBalance,
+    bool RequiresSettlementConfirmation);
+
 public sealed record CreateCustomerRequest(
     string Name,
     string? Email,
@@ -56,6 +70,10 @@ public sealed record SettlementResponse(
     int OrdersSoftDeleted,
     int PaymentsSoftDeleted,
     int TotalRowsSoftDeleted);
+
+public sealed record SettlementBlockedResponse(
+    string Message,
+    decimal ActiveBalance);
 
 public sealed record DashboardSummaryResponse(
     int ActiveCustomerCount,

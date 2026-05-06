@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 using Vanilla.Api;
 using Vanilla.Api.Data;
 using Vanilla.Api.Security;
@@ -12,6 +13,7 @@ builder.Logging.AddSimpleConsole();
 
 builder.AddServiceDefaults();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddOpenApi();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<IFieldEncryptionService>(_ =>
     new AesGcmFieldEncryptionService(AppConfiguration.GetRequiredEncryptionKey(builder.Configuration, builder.Environment)));
@@ -42,11 +44,20 @@ builder.Services.AddDbContext<AppDbContext>((serviceProvider, options) =>
 builder.Services.AddScoped<LedgerApplicationService>();
 
 var app = builder.Build();
+var apiDocsEnabled = AppConfiguration.IsApiDocsEnabled(app.Configuration, app.Environment);
 
 await DatabaseInitializer.InitializeAsync(app.Services);
 
 app.MapLedgerApi();
 app.MapDefaultEndpoints();
+
+if (apiDocsEnabled)
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference("/docs", options => options
+        .WithTitle("Vanilla API Reference")
+        .WithOpenApiRoutePattern("/openapi/{documentName}.json"));
+}
 
 app.Run();
 

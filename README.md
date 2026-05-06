@@ -19,7 +19,20 @@ The React frontend folder is still present in the workspace and can continue to 
 2. Run `docker compose up --build`.
 3. Reach the API on `http://127.0.0.1:12345`.
 
+Useful local endpoints:
+
+- `dotnet run` API base URL: `http://localhost:5189`
+- `dotnet run` health: `http://localhost:5189/health`
+- `dotnet run` OpenAPI JSON: `http://localhost:5189/openapi/v1.json`
+- `dotnet run` Scalar UI: `http://localhost:5189/docs`
+- Docker API base URL: `http://127.0.0.1:12345`
+- Docker health: `http://127.0.0.1:12345/health`
+- Docker OpenAPI JSON: `http://127.0.0.1:12345/openapi/v1.json`
+- Docker Scalar UI: `http://127.0.0.1:12345/docs`
+
 `FIELD_ENCRYPTION_KEY` can be any non-empty secret string. The API does not expect raw AES bytes, hex, or Base64 specifically. It UTF-8 encodes the configured string, hashes it with SHA-256, and uses that 32-byte hash as the AES-GCM key, so a long random secret is the safest choice.
+
+API documentation is enabled automatically in the `Development` environment. In other environments it stays off unless `ApiDocs:Enabled=true` is set in configuration.
 
 Important network decisions:
 
