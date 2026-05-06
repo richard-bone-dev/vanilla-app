@@ -35,4 +35,7 @@ public static class AppConfiguration
 
         throw new InvalidOperationException("FIELD_ENCRYPTION_KEY must be configured outside the Test environment. Legacy Encryption__FieldKey is also supported.");
     }
+
+    public static bool IsApiDocsEnabled(IConfiguration configuration, IHostEnvironment environment) =>
+        environment.IsDevelopment() || configuration.GetValue<bool>("ApiDocs:Enabled");
 }

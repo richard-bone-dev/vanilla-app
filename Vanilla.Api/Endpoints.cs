@@ -6,8 +6,18 @@ public static class Endpoints
 {
     public static IEndpointRouteBuilder MapLedgerApi(this IEndpointRouteBuilder endpoints)
     {
-        // Root health check endpoint
-        endpoints.MapGet("/", () => Results.Ok(new { status = "healthy", service = "Vanilla API" }));
+        endpoints.MapGet("/", (IConfiguration configuration, IHostEnvironment environment) =>
+            Results.Ok(new ApiRootResponse(
+                "Vanilla API",
+                "running",
+                "/health",
+                "/api",
+                AppConfiguration.IsApiDocsEnabled(configuration, environment) ? "/openapi/v1.json" : null,
+                AppConfiguration.IsApiDocsEnabled(configuration, environment) ? "/docs" : null)))
+            .WithName("GetApiRoot")
+            .WithTags("Infrastructure")
+            .WithSummary("Returns the API status and documentation routes.")
+            .Produces<ApiRootResponse>(StatusCodes.Status200OK);
 
         var group = endpoints.MapGroup("/api");
 
@@ -18,7 +28,11 @@ public static class Endpoints
         {
             var results = await service.SearchCustomersAsync(query, cancellationToken);
             return Results.Ok(results);
-        });
+        })
+            .WithName("SearchCustomers")
+            .WithTags("Customers")
+            .WithSummary("Searches customers by name.")
+            .Produces<IReadOnlyList<CustomerSearchItem>>(StatusCodes.Status200OK);
 
         group.MapPost("/customers", async (
             CreateCustomerRequest request,
@@ -36,7 +50,13 @@ public static class Endpoints
 
             var customer = await service.CreateCustomerAsync(request, cancellationToken);
             return Results.Created($"{httpContext.Request.Path}/{customer.Id}", customer);
-        });
+        })
+            .WithName("CreateCustomer")
+            .WithTags("Customers")
+            .WithSummary("Creates a new customer.")
+            .Accepts<CreateCustomerRequest>("application/json")
+            .Produces<CustomerSummaryResponse>(StatusCodes.Status201Created)
+            .ProducesValidationProblem(StatusCodes.Status400BadRequest);
 
         group.MapGet("/customers/{id:guid}/ledger", async (
             Guid id,
@@ -45,7 +65,12 @@ public static class Endpoints
         {
             var ledger = await service.GetLedgerAsync(id, cancellationToken);
             return ledger is null ? Results.NotFound() : Results.Ok(ledger);
-        });
+        })
+            .WithName("GetCustomerLedger")
+            .WithTags("Customers")
+            .WithSummary("Gets a customer's ledger history.")
+            .Produces<CustomerLedgerResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
 
         group.MapPost("/orders", async (
             CreateOrderRequest request,
@@ -55,7 +80,14 @@ public static class Endpoints
         {
             var result = await service.CreateOrderAsync(request, cancellationToken);
             return ToEntryResult(result, httpContext.Request.Path);
-        });
+        })
+            .WithName("CreateOrder")
+            .WithTags("Orders")
+            .WithSummary("Creates a new order entry.")
+            .Accepts<CreateOrderRequest>("application/json")
+            .Produces<CreatedEntryEnvelope>(StatusCodes.Status201Created)
+            .ProducesValidationProblem(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound);
 
         group.MapPost("/payments", async (
             CreatePaymentRequest request,
@@ -65,7 +97,14 @@ public static class Endpoints
         {
             var result = await service.CreatePaymentAsync(request, cancellationToken);
             return ToEntryResult(result, httpContext.Request.Path);
-        });
+        })
+            .WithName("CreatePayment")
+            .WithTags("Payments")
+            .WithSummary("Creates a new payment entry.")
+            .Accepts<CreatePaymentRequest>("application/json")
+            .Produces<CreatedEntryEnvelope>(StatusCodes.Status201Created)
+            .ProducesValidationProblem(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound);
 
         group.MapPost("/quick-entry", async (
             QuickEntryRequest request,
@@ -84,7 +123,14 @@ public static class Endpoints
             }
 
             return Results.Ok(result.Response);
-        });
+        })
+            .WithName("CreateQuickEntry")
+            .WithTags("Entries")
+            .WithSummary("Creates an order or payment with optional customer creation.")
+            .Accepts<QuickEntryRequest>("application/json")
+            .Produces<QuickEntryResponse>(StatusCodes.Status200OK)
+            .Produces<QuickEntryResponse>(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem(StatusCodes.Status400BadRequest);
 
         group.MapPost("/customers/{id:guid}/settle", async (
             Guid id,
@@ -99,15 +145,19 @@ public static class Endpoints
 
             if (result.ActiveBalance is not null)
             {
-                return Results.BadRequest(new
-                {
-                    message = "Customer can only be settled when the active balance is zero.",
-                    activeBalance = result.ActiveBalance
-                });
+                return Results.BadRequest(new SettlementBlockedResponse(
+                    "Customer can only be settled when the active balance is zero.",
+                    result.ActiveBalance.Value));
             }
 
             return Results.Ok(result.Response);
-        });
+        })
+            .WithName("SettleCustomer")
+            .WithTags("Customers")
+            .WithSummary("Soft-deletes a fully settled customer and related entries.")
+            .Produces<SettlementResponse>(StatusCodes.Status200OK)
+            .Produces<SettlementBlockedResponse>(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound);
 
         group.MapGet("/dashboard/summary", async (
             LedgerApplicationService service,
@@ -115,7 +165,11 @@ public static class Endpoints
         {
             var response = await service.GetDashboardSummaryAsync(cancellationToken);
             return Results.Ok(response);
-        });
+        })
+            .WithName("GetDashboardSummary")
+            .WithTags("Dashboard")
+            .WithSummary("Gets the dashboard summary totals.")
+            .Produces<DashboardSummaryResponse>(StatusCodes.Status200OK);
 
         return endpoints;
     }
@@ -132,12 +186,10 @@ public static class Endpoints
             return Results.NotFound();
         }
 
-        return Results.Created(path, new
-        {
-            createdItem = result.CreatedItem,
-            customer = result.Customer,
-            resultingBalance = result.ResultingBalance,
-            requiresSettlementConfirmation = result.RequiresSettlementConfirmation
-        });
+        return Results.Created(path, new CreatedEntryEnvelope(
+            result.CreatedItem!,
+            result.Customer!,
+            result.ResultingBalance!.Value,
+            result.RequiresSettlementConfirmation));
     }
 }
