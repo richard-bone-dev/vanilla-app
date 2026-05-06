@@ -18,7 +18,7 @@ public sealed class ConfigurationAndEncryptionTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:SqlServer"] = "Server=sqlserver,1433;Database=VanillaApp;"
+                ["ConnectionStrings:DefaultConnection"] = "Server=sqlserver,1433;Database=VanillaApp;"
             })
             .Build();
 

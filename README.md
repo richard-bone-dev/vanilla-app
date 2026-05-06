@@ -1,54 +1,114 @@
-# Vanilla Aspire App
+# vanilla-app
 
-This workspace keeps the Aspire development flow for day-to-day work and adds a Docker path for running the backend with SQL Server isolated behind the API container.
+`vanilla-app` is the ASP.NET Core Minimal API backend. The demo frontend lives in `frontend/`.
 
-## Aspire development
+## Standard local URLs
 
-Use the AppHost for normal local development. It starts:
+- API base URL: `http://localhost:12345`
+- Health: `http://localhost:12345/health`
+- OpenAPI JSON: `http://localhost:12345/openapi/v1.json`
+- Scalar UI: `http://localhost:12345/scalar/v1`
+- UI dev URL: `http://localhost:5173`
+- SQL Server: `localhost:1433`
 
-- `sqlserver` as an Aspire-managed SQL Server container with a persistent volume
-- `api` as the ASP.NET Core minimal API project
+## Non-Docker local run
 
-The AppHost injects the SQL connection and the field encryption key into the API so the backend still runs through the same Aspire orchestration flow.
+1. Start SQL Server locally on `localhost:1433` or run the Compose SQL container.
+2. Set a non-empty `FIELD_ENCRYPTION_KEY`.
+3. Run the API:
 
-The React frontend folder is still present in the workspace and can continue to run independently alongside the AppHost-backed API flow.
+```powershell
+$env:FIELD_ENCRYPTION_KEY="replace-with-a-long-random-secret"
+$env:ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=VanillaApp;User Id=sa;Password=ChangeMe_Example-Strong-Pass123!;Encrypt=False;TrustServerCertificate=True"
+dotnet run --project Vanilla.Api/Vanilla.Api.csproj --launch-profile http
+```
 
-## Docker development
+The API launch profile is pinned to `http://localhost:12345`.
 
-1. Copy `.env.example` to `.env` and set strong values for `SQLSERVER_SA_PASSWORD` and `FIELD_ENCRYPTION_KEY`.
-2. Run `docker compose up --build`.
-3. Reach the API on `http://127.0.0.1:12345`.
+## Docker run
 
-Useful local endpoints:
+1. Copy `.env.example` to `.env`.
+2. Update `SQLSERVER_SA_PASSWORD` and `FIELD_ENCRYPTION_KEY`.
+3. Start the stack:
 
-- `dotnet run` API base URL: `http://localhost:5189`
-- `dotnet run` health: `http://localhost:5189/health`
-- `dotnet run` OpenAPI JSON: `http://localhost:5189/openapi/v1.json`
-- `dotnet run` Scalar UI: `http://localhost:5189/docs`
-- Docker API base URL: `http://127.0.0.1:12345`
-- Docker health: `http://127.0.0.1:12345/health`
-- Docker OpenAPI JSON: `http://127.0.0.1:12345/openapi/v1.json`
-- Docker Scalar UI: `http://127.0.0.1:12345/docs`
+```powershell
+docker compose up --build
+```
 
-`FIELD_ENCRYPTION_KEY` can be any non-empty secret string. The API does not expect raw AES bytes, hex, or Base64 specifically. It UTF-8 encodes the configured string, hashes it with SHA-256, and uses that 32-byte hash as the AES-GCM key, so a long random secret is the safest choice.
+Docker networking is standardized as:
 
-API documentation is enabled automatically in the `Development` environment. In other environments it stays off unless `ApiDocs:Enabled=true` is set in configuration.
+- The API listens on port `12345` inside the container.
+- Docker publishes `127.0.0.1:12345` on the host to container port `12345`.
+- SQL Server listens on `1433` inside the container and is published to `127.0.0.1:1433`.
 
-Important network decisions:
+## Frontend dev integration
 
-- The API is the only published container port and it is bound to `127.0.0.1` only.
-- SQL Server is attached only to the private `backend` Docker network.
-- SQL Server has no host port mapping, so it is not reachable from the host network or Tailscale directly.
-- The API connects to SQL Server by the Docker service name `sqlserver`.
+The frontend Vite dev server runs on `http://localhost:5173`.
+
+Create `frontend/.env.local` from `frontend/.env.example` if you want to override the API base URL explicitly:
+
+```powershell
+Copy-Item frontend/.env.example frontend/.env.local
+```
+
+By default, the frontend dev client targets `http://localhost:12345`, and the API CORS policy allows `http://localhost:5173`.
+
+## Docs and health
+
+OpenAPI JSON is exposed at:
+
+```text
+http://localhost:12345/openapi/v1.json
+```
+
+Scalar UI is exposed at:
+
+```text
+http://localhost:12345/scalar/v1
+```
+
+API docs are enabled automatically in `Development`. In other environments, set `ApiDocs:Enabled=true` to enable them.
+
+Health is exposed at:
+
+```text
+http://localhost:12345/health
+```
+
+## Verification
+
+Run:
+
+```powershell
+Invoke-WebRequest http://localhost:12345/health
+Invoke-WebRequest http://localhost:12345/openapi/v1.json
+```
+
+Then manually test:
+
+```text
+http://localhost:12345/scalar/v1
+```
+
+## Troubleshooting
+
+- `404` at `/scalar/v1`:
+  Make sure the API is running in `Development`, or set `ApiDocs:Enabled=true`.
+- Port mismatch:
+  If the API is not reachable on `12345`, check `Vanilla.Api/Properties/launchSettings.json`, `Vanilla.Api/Dockerfile`, and `docker-compose.yml` for overridden local settings, then restart the process or containers.
+- CORS failures from the frontend:
+  Confirm the UI is running on `http://localhost:5173` and the API `Cors:AllowedOrigins` configuration still includes that origin.
+- SQL connection issues:
+  For Docker, use the `sqlserver` service name in `ConnectionStrings__DefaultConnection`. For host-based API runs, use `localhost,1433`.
+- Encryption key startup error:
+  `FIELD_ENCRYPTION_KEY` can be any non-empty secret string. The app UTF-8 encodes it, hashes it with SHA-256, and uses that 32-byte hash for AES-GCM.
 
 ## Tailscale Serve
 
-Expose only the API through Tailscale Serve. Tailscale’s January 2026 Serve documentation says reverse proxies target `http://127.0.0.1`, so keep the API bound to loopback and do not publish SQL Server.
-
-Example:
+Expose only the API through Tailscale Serve:
 
 ```bash
 tailscale serve 12345
 ```
 
-That shares the local API privately to your tailnet over HTTPS while still leaving SQL Server private inside Docker. Do not configure Tailscale Serve or Funnel for SQL Server.
+That keeps the API reachable through Tailscale while SQL Server remains bound to local Docker networking and `localhost`.

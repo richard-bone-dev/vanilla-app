@@ -7,7 +7,9 @@ import type {
   CustomerLedgerResponse,
 } from "./types";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
+const BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
+  (import.meta.env.DEV ? "http://localhost:12345" : undefined);
 
 function apiUrl(path: string): string {
   const base = BASE_URL?.replace(/\/+$/, "") ?? "";
