@@ -18,6 +18,17 @@ public sealed class LedgerApplicationService(AppDbContext dbContext, IClock cloc
     private readonly AppDbContext _dbContext = dbContext;
     private readonly IClock _clock = clock;
 
+    public async Task<IReadOnlyList<CustomerSummaryResponse>> GetCustomersAsync(CancellationToken cancellationToken) =>
+        await _dbContext.Customers
+            .AsNoTracking()
+            .OrderBy(customer => customer.Name)
+            .Select(customer => new CustomerSummaryResponse(
+                customer.Id,
+                customer.Name,
+                (customer.Orders.Select(order => (decimal?)order.Amount).Sum() ?? 0m)
+                - (customer.Payments.Select(payment => (decimal?)payment.Amount).Sum() ?? 0m)))
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<CustomerSearchItem>> SearchCustomersAsync(string? query, CancellationToken cancellationToken)
     {
         var search = query?.Trim() ?? string.Empty;
@@ -49,8 +60,30 @@ public sealed class LedgerApplicationService(AppDbContext dbContext, IClock cloc
         };
 
         _dbContext.Customers.Add(customer);
+
+        if (request.OpeningBalance > 0m)
+        {
+            _dbContext.Orders.Add(new Order
+            {
+                Customer = customer,
+                Amount = request.OpeningBalance,
+                Notes = "Opening balance",
+                CreatedUtc = _clock.UtcNow
+            });
+        }
+        else if (request.OpeningBalance < 0m)
+        {
+            _dbContext.Payments.Add(new Payment
+            {
+                Customer = customer,
+                Amount = Math.Abs(request.OpeningBalance),
+                Notes = "Opening balance",
+                CreatedUtc = _clock.UtcNow
+            });
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
-        return new CustomerSummaryResponse(customer.Id, customer.Name, 0m);
+        return new CustomerSummaryResponse(customer.Id, customer.Name, request.OpeningBalance);
     }
 
     public async Task<CustomerLedgerResponse?> GetLedgerAsync(Guid customerId, CancellationToken cancellationToken)
@@ -85,6 +118,38 @@ public sealed class LedgerApplicationService(AppDbContext dbContext, IClock cloc
             .ToListAsync(cancellationToken);
 
         return new CustomerLedgerResponse(customer, orders, payments);
+    }
+
+    public async Task<IReadOnlyList<LedgerEntryListItem>> GetLedgerEntriesAsync(CancellationToken cancellationToken)
+    {
+        var orders = await _dbContext.Orders
+            .AsNoTracking()
+            .Select(order => new LedgerEntryListItem(
+                order.Id,
+                "Order",
+                order.CustomerId,
+                order.Customer.Name,
+                order.Amount,
+                order.Notes,
+                order.CreatedUtc))
+            .ToListAsync(cancellationToken);
+
+        var payments = await _dbContext.Payments
+            .AsNoTracking()
+            .Select(payment => new LedgerEntryListItem(
+                payment.Id,
+                "Payment",
+                payment.CustomerId,
+                payment.Customer.Name,
+                payment.Amount,
+                payment.Notes,
+                payment.CreatedUtc))
+            .ToListAsync(cancellationToken);
+
+        return orders
+            .Concat(payments)
+            .OrderByDescending(entry => entry.CreatedUtc)
+            .ToList();
     }
 
     public Task<EntryMutationResult> CreateOrderAsync(CreateOrderRequest request, CancellationToken cancellationToken) =>
@@ -187,40 +252,26 @@ public sealed class LedgerApplicationService(AppDbContext dbContext, IClock cloc
             return SettlementResult.BalanceNotZero(activeBalance);
         }
 
-        var deletedUtc = _clock.UtcNow;
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var response = await SoftDeleteCustomerGraphAsync(customerId, "Settled", cancellationToken);
+        return SettlementResult.Success(response);
+    }
 
-        var customersSoftDeleted = await _dbContext.Customers
-            .IgnoreQueryFilters()
-            .Where(customer => customer.Id == customerId && !customer.IsDeleted)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(customer => customer.IsDeleted, true)
-                .SetProperty(customer => customer.DeletedUtc, deletedUtc)
-                .SetProperty(customer => customer.DeletedReason, "Settled"), cancellationToken);
+    public async Task<CustomerDeleteResult> DeleteCustomerIfSettledAsync(Guid customerId, CancellationToken cancellationToken)
+    {
+        var exists = await _dbContext.Customers.AnyAsync(customer => customer.Id == customerId, cancellationToken);
+        if (!exists)
+        {
+            return CustomerDeleteResult.NotFound();
+        }
 
-        var ordersSoftDeleted = await _dbContext.Orders
-            .IgnoreQueryFilters()
-            .Where(order => order.CustomerId == customerId && !order.IsDeleted)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(order => order.IsDeleted, true)
-                .SetProperty(order => order.DeletedUtc, deletedUtc)
-                .SetProperty(order => order.DeletedReason, "Settled"), cancellationToken);
+        var activeBalance = await GetCustomerBalanceAsync(customerId, cancellationToken);
+        if (activeBalance > 0m)
+        {
+            return CustomerDeleteResult.BalanceNotSettled(activeBalance);
+        }
 
-        var paymentsSoftDeleted = await _dbContext.Payments
-            .IgnoreQueryFilters()
-            .Where(payment => payment.CustomerId == customerId && !payment.IsDeleted)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(payment => payment.IsDeleted, true)
-                .SetProperty(payment => payment.DeletedUtc, deletedUtc)
-                .SetProperty(payment => payment.DeletedReason, "Settled"), cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
-
-        return SettlementResult.Success(new SettlementResponse(
-            customersSoftDeleted,
-            ordersSoftDeleted,
-            paymentsSoftDeleted,
-            customersSoftDeleted + ordersSoftDeleted + paymentsSoftDeleted));
+        await DeleteCustomerGraphAsync(customerId, cancellationToken);
+        return CustomerDeleteResult.Success();
     }
 
     public async Task<DashboardSummaryResponse> GetDashboardSummaryAsync(CancellationToken cancellationToken)
@@ -234,6 +285,42 @@ public sealed class LedgerApplicationService(AppDbContext dbContext, IClock cloc
             activeOrderTotal,
             activePaymentTotal,
             activeOrderTotal - activePaymentTotal);
+    }
+
+    public async Task<ClearLedgerDataResponse> ClearLedgerDataAsync(CancellationToken cancellationToken)
+    {
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            var deletedUtc = _clock.UtcNow;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            var ordersSoftDeleted = await _dbContext.Orders
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(order => order.IsDeleted, true)
+                    .SetProperty(order => order.DeletedUtc, deletedUtc)
+                    .SetProperty(order => order.DeletedReason, "Cleared"), cancellationToken);
+
+            var paymentsSoftDeleted = await _dbContext.Payments
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(payment => payment.IsDeleted, true)
+                    .SetProperty(payment => payment.DeletedUtc, deletedUtc)
+                    .SetProperty(payment => payment.DeletedReason, "Cleared"), cancellationToken);
+
+            var customersSoftDeleted = await _dbContext.Customers
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(customer => customer.IsDeleted, true)
+                    .SetProperty(customer => customer.DeletedUtc, deletedUtc)
+                    .SetProperty(customer => customer.DeletedReason, "Cleared"), cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return new ClearLedgerDataResponse(
+                customersSoftDeleted,
+                ordersSoftDeleted,
+                paymentsSoftDeleted,
+                customersSoftDeleted + ordersSoftDeleted + paymentsSoftDeleted);
+        });
     }
 
     private async Task<EntryMutationResult> CreateEntryAsync(
@@ -291,6 +378,77 @@ public sealed class LedgerApplicationService(AppDbContext dbContext, IClock cloc
             new CustomerSummaryResponse(customer.Id, customer.Name, resultingBalance),
             resultingBalance,
             entryType == "Payment" && resultingBalance == 0m);
+    }
+
+    private async Task<SettlementResponse> SoftDeleteCustomerGraphAsync(
+        Guid customerId,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            var deletedUtc = _clock.UtcNow;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            var ordersSoftDeleted = await _dbContext.Orders
+                .IgnoreQueryFilters()
+                .Where(order => order.CustomerId == customerId && !order.IsDeleted)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(order => order.IsDeleted, true)
+                    .SetProperty(order => order.DeletedUtc, deletedUtc)
+                    .SetProperty(order => order.DeletedReason, reason), cancellationToken);
+
+            var paymentsSoftDeleted = await _dbContext.Payments
+                .IgnoreQueryFilters()
+                .Where(payment => payment.CustomerId == customerId && !payment.IsDeleted)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(payment => payment.IsDeleted, true)
+                    .SetProperty(payment => payment.DeletedUtc, deletedUtc)
+                    .SetProperty(payment => payment.DeletedReason, reason), cancellationToken);
+
+            var customersSoftDeleted = await _dbContext.Customers
+                .IgnoreQueryFilters()
+                .Where(customer => customer.Id == customerId && !customer.IsDeleted)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(customer => customer.IsDeleted, true)
+                    .SetProperty(customer => customer.DeletedUtc, deletedUtc)
+                    .SetProperty(customer => customer.DeletedReason, reason), cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return new SettlementResponse(
+                customersSoftDeleted,
+                ordersSoftDeleted,
+                paymentsSoftDeleted,
+                customersSoftDeleted + ordersSoftDeleted + paymentsSoftDeleted);
+        });
+    }
+
+    private async Task DeleteCustomerGraphAsync(Guid customerId, CancellationToken cancellationToken)
+    {
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            await _dbContext.Orders
+                .IgnoreQueryFilters()
+                .Where(order => order.CustomerId == customerId)
+                .ExecuteDeleteAsync(cancellationToken);
+
+            await _dbContext.Payments
+                .IgnoreQueryFilters()
+                .Where(payment => payment.CustomerId == customerId)
+                .ExecuteDeleteAsync(cancellationToken);
+
+            await _dbContext.Customers
+                .IgnoreQueryFilters()
+                .Where(customer => customer.Id == customerId)
+                .ExecuteDeleteAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+        });
     }
 
     private async Task<decimal> GetCustomerBalanceAsync(Guid customerId, CancellationToken cancellationToken)
@@ -383,4 +541,13 @@ public sealed record SettlementResult(
     public static SettlementResult Success(SettlementResponse response) => new(response, false, null);
     public static SettlementResult NotFound() => new(null, true, null);
     public static SettlementResult BalanceNotZero(decimal balance) => new(null, false, balance);
+}
+
+public sealed record CustomerDeleteResult(
+    bool IsNotFound,
+    decimal? ActiveBalance)
+{
+    public static CustomerDeleteResult Success() => new(false, null);
+    public static CustomerDeleteResult NotFound() => new(true, null);
+    public static CustomerDeleteResult BalanceNotSettled(decimal balance) => new(false, balance);
 }

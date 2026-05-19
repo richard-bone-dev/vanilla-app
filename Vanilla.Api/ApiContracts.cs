@@ -18,7 +18,8 @@ public sealed record CreateCustomerRequest(
     string Name,
     string? Email,
     string? Phone,
-    string? Notes);
+    string? Notes,
+    decimal OpeningBalance = 0m);
 
 public sealed record CreateOrderRequest(
     Guid CustomerId,
@@ -49,6 +50,15 @@ public sealed record CustomerLedgerResponse(
     IReadOnlyList<LedgerEntryResponse> Orders,
     IReadOnlyList<LedgerEntryResponse> Payments);
 
+public sealed record LedgerEntryListItem(
+    Guid Id,
+    string EntryType,
+    Guid CustomerId,
+    string CustomerName,
+    decimal Amount,
+    string? Notes,
+    DateTime CreatedUtc);
+
 public sealed record CreatedItemResponse(
     Guid Id,
     string EntryType,
@@ -66,6 +76,12 @@ public sealed record QuickEntryResponse(
     string? Message);
 
 public sealed record SettlementResponse(
+    int CustomersSoftDeleted,
+    int OrdersSoftDeleted,
+    int PaymentsSoftDeleted,
+    int TotalRowsSoftDeleted);
+
+public sealed record ClearLedgerDataResponse(
     int CustomersSoftDeleted,
     int OrdersSoftDeleted,
     int PaymentsSoftDeleted,
