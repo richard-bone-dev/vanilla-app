@@ -54,7 +54,8 @@ http://localhost:12345
 For API integration, serve the frontend locally:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\frontend\serve.ps1
+cd frontend
+powershell -ExecutionPolicy Bypass -File .\serve.ps1
 ```
 
 Then open:
@@ -84,7 +85,7 @@ Useful local endpoints:
 - Scalar: `http://localhost:12345/scalar/v1`
 - Health: `http://localhost:12345/health`
 
-If a browser still has an old service worker registered for `localhost:5173`, unregister it in DevTools under `Application > Service Workers`, then reload `http://localhost:5173/index.html`.
+If a browser still has an old service worker registered for `localhost:5173`, first open `http://localhost:5173/sw-reset.html`. If the old worker still blocks navigation, unregister it in DevTools under `Application > Service Workers`, then hard reload `http://localhost:5173/index.html`.
 
 ## Docs and health
 

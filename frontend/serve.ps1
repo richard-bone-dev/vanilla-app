@@ -22,6 +22,25 @@ function Get-ContentType {
     }
 }
 
+function Set-CommonHeaders {
+    param(
+        [System.Net.HttpListenerResponse]$Response,
+        [string]$Path
+    )
+
+    $fileName = [System.IO.Path]::GetFileName($Path).ToLowerInvariant()
+
+    if ($fileName -in @("sw.js", "serviceworkercleanup.js", "config.js", "index.html", "sw-reset.html")) {
+        $Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        $Response.Headers["Pragma"] = "no-cache"
+        $Response.Headers["Expires"] = "0"
+    }
+
+    if ($fileName -eq "sw.js") {
+        $Response.Headers["Service-Worker-Allowed"] = "/"
+    }
+}
+
 try {
     $listener.Start()
     Write-Host "Serving frontend at $prefix"
@@ -54,6 +73,7 @@ try {
 
         $bytes = [System.IO.File]::ReadAllBytes($candidatePath)
         $context.Response.ContentType = Get-ContentType $candidatePath
+        Set-CommonHeaders $context.Response $candidatePath
         $context.Response.ContentLength64 = $bytes.Length
         $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
         $context.Response.Close()

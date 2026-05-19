@@ -5,6 +5,7 @@ A dark, local-first prototype for recording simple customer sales and payments.
 Run the local static server:
 
 ```powershell
+cd frontend
 powershell -ExecutionPolicy Bypass -File .\serve.ps1
 ```
 
@@ -12,7 +13,7 @@ Then open `http://localhost:5173`.
 
 Do not open `index.html` directly with `file://`; the demo UI is intended to run over HTTP at `localhost:5173`. The app stores data in the browser's local storage.
 
-If a browser still has an old service worker registered for `localhost:5173`, unregister it in DevTools under `Application > Service Workers`, then reload `http://localhost:5173/index.html`.
+If a browser still has an old service worker registered for `localhost:5173`, first open `http://localhost:5173/sw-reset.html`. If the old worker still blocks navigation, unregister it in DevTools under `Application > Service Workers`, then hard reload `http://localhost:5173/index.html`.
 
 The API base URL is configured in `config.js`:
 
