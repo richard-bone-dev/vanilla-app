@@ -9,6 +9,13 @@ const state = {
 
 let mode = "sale";
 let activeFilter = "all";
+let selectedCustomerId = "";
+let selectedCustomerName = "";
+let selectedCustomerSnapshot = null;
+let customerSuggestions = [];
+let customerSearchLoading = false;
+let customerSearchError = "";
+let customerSearchRequestId = 0;
 
 const els = {
   addCustomer: document.querySelector("#addCustomer"),
@@ -22,6 +29,7 @@ const els = {
   customerForm: document.querySelector("#customerForm"),
   customerList: document.querySelector("#customerList"),
   customerName: document.querySelector("#customerName"),
+  customerSuggestions: document.querySelector("#customerSuggestions"),
   dismissCustomer: document.querySelector("#dismissCustomer"),
   entryList: document.querySelector("#entryList"),
   exportBox: document.querySelector("#exportBox"),
@@ -67,7 +75,9 @@ function bindEvents() {
   });
 
   els.quickForm.addEventListener("submit", recordQuickEntry);
-  els.quickCustomer.addEventListener("change", renderSelectedCustomer);
+  els.quickCustomer.addEventListener("input", handleCustomerSearchInput);
+  els.quickCustomer.addEventListener("focus", renderCustomerSuggestions);
+  els.quickCustomer.addEventListener("keydown", handleCustomerSearchKeys);
   els.openFullApp.addEventListener("click", openFullApp);
   els.closeFullApp.addEventListener("click", closeFullApp);
   els.addCustomer.addEventListener("click", openCustomerDialog);
@@ -83,10 +93,20 @@ function bindEvents() {
     if (event.key === "Escape" && els.fullApp.classList.contains("is-open")) {
       closeFullApp();
     }
+
+    if (event.key === "Escape" && document.activeElement === els.quickCustomer) {
+      hideCustomerSuggestions();
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".customer-search")) {
+      hideCustomerSuggestions();
+    }
   });
 }
 
-async function loadData({ preserveCustomerId = els.quickCustomer.value, quiet = false } = {}) {
+async function loadData({ preserveCustomerId = selectedCustomerId, quiet = false } = {}) {
   state.loading = true;
   state.error = "";
   render(preserveCustomerId);
@@ -125,6 +145,10 @@ function setMode(nextMode) {
   els.quickTitle.textContent = mode === "sale" ? "Sale" : "Payment";
   els.submitLabel.textContent = mode === "sale" ? "Record sale" : "Record payment";
   els.paidNowField.hidden = mode !== "sale";
+  els.quickForm.classList.toggle("is-payment", mode !== "sale");
+  if (mode !== "sale") {
+    els.quickPaidNow.value = "";
+  }
   document.querySelectorAll(".mode-option").forEach((button) => {
     const active = button.dataset.mode === mode;
     button.classList.toggle("is-active", active);
@@ -135,11 +159,17 @@ function setMode(nextMode) {
 
 async function recordQuickEntry(event) {
   event.preventDefault();
-  const customerId = els.quickCustomer.value;
+  const customerId = selectedCustomerId;
   const amount = toMoney(els.quickAmount.value);
-  const paidNow = toMoney(els.quickPaidNow.value);
+  const paidNow = mode === "sale" ? toMoney(els.quickPaidNow.value) : 0;
 
-  if (!customerId || amount <= 0) return;
+  if (!customerId) {
+    els.quickCustomer.reportValidity();
+    setApiStatus("Select a valid customer from the search results.", "unhealthy");
+    return;
+  }
+
+  if (amount <= 0) return;
 
   state.mutating = true;
   renderControls();
@@ -161,10 +191,10 @@ async function recordQuickEntry(event) {
     els.quickForm.reset();
     if (!deletedCustomer) {
       await loadData({ preserveCustomerId: customerId, quiet: true });
-      if (getCustomer(customerId)) {
-        els.quickCustomer.value = customerId;
-      }
+      selectCustomerById(customerId);
       renderSelectedCustomer();
+    } else {
+      clearSelectedCustomer({ clearInput: true });
     }
 
     setApiStatus(deletedCustomer ? "Settled customer deleted from API" : "Entry saved to API", "healthy");
@@ -289,9 +319,9 @@ async function clearData() {
   }
 }
 
-function render(preferredCustomerId = els.quickCustomer.value) {
+function render(preferredCustomerId = selectedCustomerId) {
   renderApiConfig();
-  renderCustomerOptions(preferredCustomerId);
+  renderCustomerSearch(preferredCustomerId);
   renderSelectedCustomer();
   renderMetrics();
   renderCustomers();
@@ -308,38 +338,30 @@ function renderApiConfig() {
   }
 }
 
-function renderCustomerOptions(preferredCustomerId = els.quickCustomer.value) {
+function renderCustomerSearch(preferredCustomerId = selectedCustomerId) {
   if (state.loading) {
-    els.quickCustomer.replaceChildren(optionFor("", "Loading customers..."));
+    els.quickCustomer.placeholder = "Loading customers...";
+    hideCustomerSuggestions();
     return;
   }
 
   if (state.customers.length === 0) {
-    els.quickCustomer.replaceChildren(optionFor("", "Add a customer first"));
+    els.quickCustomer.placeholder = "Add a customer first";
+    clearSelectedCustomer({ clearInput: true });
     return;
   }
 
-  els.quickCustomer.replaceChildren(
-    ...state.customers.map((customer) => optionFor(customer.id, customer.name)),
-  );
-
-  const selectedId = state.customers.some((customer) => customer.id === preferredCustomerId)
-    ? preferredCustomerId
-    : state.customers[0].id;
-  els.quickCustomer.value = selectedId;
-}
-
-function optionFor(value, label) {
-  const option = document.createElement("option");
-  option.value = value;
-  option.textContent = label;
-  return option;
+  els.quickCustomer.placeholder = "Type 3+ characters to search";
+  if (preferredCustomerId) {
+    selectCustomerById(preferredCustomerId, { keepSuggestions: true });
+  }
+  updateCustomerValidity();
 }
 
 function renderSelectedCustomer() {
-  const customer = getCustomer(els.quickCustomer.value);
+  const customer = getSelectedCustomer();
   if (!customer) {
-    els.selectedCustomerName.textContent = state.loading ? "Loading customers" : "No customer";
+    els.selectedCustomerName.textContent = state.loading ? "Loading customers" : "Select customer";
     els.selectedCustomerBalance.textContent = currency(0);
     els.selectedCustomerStatus.textContent = "settled";
     els.selectedCustomerStatus.classList.remove("owed");
@@ -444,13 +466,108 @@ function renderFilters() {
   });
 }
 
+async function handleCustomerSearchInput() {
+  const query = els.quickCustomer.value.trim();
+
+  if (selectedCustomerId && query !== selectedCustomerName) {
+    clearSelectedCustomer();
+  }
+
+  customerSearchError = "";
+  if (query.length < 3) {
+    customerSuggestions = [];
+    customerSearchLoading = false;
+    renderCustomerSuggestions();
+    renderSelectedCustomer();
+    renderControls();
+    return;
+  }
+
+  const requestId = ++customerSearchRequestId;
+  customerSearchLoading = true;
+  renderCustomerSuggestions();
+
+  try {
+    const results = await window.vanillaApi.searchCustomers(query);
+    if (requestId !== customerSearchRequestId) return;
+
+    customerSuggestions = normalizeCustomers(results);
+    customerSearchError = "";
+  } catch (error) {
+    if (requestId !== customerSearchRequestId) return;
+
+    customerSuggestions = [];
+    customerSearchError = errorMessage(error);
+  } finally {
+    if (requestId === customerSearchRequestId) {
+      customerSearchLoading = false;
+      renderCustomerSuggestions();
+      renderControls();
+    }
+  }
+}
+
+function handleCustomerSearchKeys(event) {
+  if (event.key === "Escape") {
+    hideCustomerSuggestions();
+  }
+}
+
+function renderCustomerSuggestions() {
+  const query = els.quickCustomer.value.trim();
+  updateCustomerValidity();
+
+  if (state.loading || state.mutating || query.length < 3 || selectedCustomerId) {
+    hideCustomerSuggestions();
+    return;
+  }
+
+  els.customerSuggestions.hidden = false;
+  els.quickCustomer.setAttribute("aria-expanded", "true");
+
+  if (customerSearchLoading) {
+    els.customerSuggestions.innerHTML = '<p class="suggestion-empty">Searching...</p>';
+    return;
+  }
+
+  if (customerSearchError) {
+    els.customerSuggestions.innerHTML = `<p class="suggestion-empty">Search unavailable. ${escapeHtml(customerSearchError)}</p>`;
+    return;
+  }
+
+  if (customerSuggestions.length === 0) {
+    els.customerSuggestions.innerHTML = '<p class="suggestion-empty">No matching customers.</p>';
+    return;
+  }
+
+  els.customerSuggestions.replaceChildren(
+    ...customerSuggestions.map((customer) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "suggestion-option";
+      button.setAttribute("role", "option");
+      button.innerHTML = `
+        <span>${escapeHtml(customer.name)}</span>
+        <strong>${currency(customer.currentBalance)}</strong>
+      `;
+      button.addEventListener("click", () => selectCustomer(customer));
+      return button;
+    }),
+  );
+}
+
+function hideCustomerSuggestions() {
+  els.customerSuggestions.hidden = true;
+  els.quickCustomer.setAttribute("aria-expanded", "false");
+}
+
 function renderControls() {
   const busy = state.loading || state.mutating;
   const noCustomers = state.customers.length === 0;
   els.quickCustomer.disabled = busy || noCustomers;
   els.quickAmount.disabled = busy || noCustomers;
   els.quickPaidNow.disabled = busy || noCustomers || mode !== "sale";
-  els.quickSubmit.disabled = busy || noCustomers;
+  els.quickSubmit.disabled = busy || noCustomers || !selectedCustomerId;
   els.addCustomer.disabled = busy;
   els.newCustomerQuick.disabled = busy;
   els.exportData.disabled = busy;
@@ -458,6 +575,7 @@ function renderControls() {
   els.checkApi.disabled = state.mutating;
   els.customerName.disabled = state.mutating;
   els.openingBalance.disabled = state.mutating;
+  updateCustomerValidity();
 }
 
 function normalizeCustomers(customers) {
@@ -519,6 +637,54 @@ function setApiStatus(message, status) {
 
 function getCustomer(customerId) {
   return state.customers.find((customer) => customer.id === customerId);
+}
+
+function getSelectedCustomer() {
+  if (!selectedCustomerId) return null;
+  return getCustomer(selectedCustomerId) ?? selectedCustomerSnapshot;
+}
+
+function selectCustomerById(customerId, { keepSuggestions = false } = {}) {
+  const customer = getCustomer(customerId) ?? selectedCustomerSnapshot;
+  if (!customer || customer.id !== customerId) {
+    clearSelectedCustomer({ clearInput: true });
+    return;
+  }
+
+  selectCustomer(customer, { keepSuggestions });
+}
+
+function selectCustomer(customer, { keepSuggestions = false } = {}) {
+  selectedCustomerId = customer.id;
+  selectedCustomerName = customer.name;
+  selectedCustomerSnapshot = customer;
+  els.quickCustomer.value = customer.name;
+  customerSuggestions = [];
+
+  if (!keepSuggestions) {
+    hideCustomerSuggestions();
+  }
+
+  renderSelectedCustomer();
+  renderControls();
+}
+
+function clearSelectedCustomer({ clearInput = false } = {}) {
+  selectedCustomerId = "";
+  selectedCustomerName = "";
+  selectedCustomerSnapshot = null;
+
+  if (clearInput) {
+    els.quickCustomer.value = "";
+  }
+
+  updateCustomerValidity();
+}
+
+function updateCustomerValidity() {
+  const needsCustomer = !state.loading && !state.mutating && state.customers.length > 0;
+  const valid = !needsCustomer || Boolean(selectedCustomerId);
+  els.quickCustomer.setCustomValidity(valid ? "" : "Select a customer from the search results.");
 }
 
 function getBalance(customerId) {

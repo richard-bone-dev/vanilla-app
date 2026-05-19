@@ -253,6 +253,73 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(79, 212, 220, 0.13);
 }
 
+.customer-search {
+  position: relative;
+}
+
+.suggestion-list {
+  background: #0d1017;
+  border: 1px solid rgba(79, 212, 220, 0.32);
+  border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
+  left: 0;
+  max-height: 13rem;
+  overflow: auto;
+  padding: 0.35rem;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  z-index: 20;
+}
+
+.suggestion-option {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  min-height: 2.55rem;
+  padding: 0 0.65rem;
+  text-align: left;
+  width: 100%;
+}
+
+.suggestion-option:hover,
+.suggestion-option:focus {
+  background: rgba(79, 212, 220, 0.12);
+  outline: none;
+}
+
+.suggestion-option strong {
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.suggestion-empty {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin: 0;
+  padding: 0.65rem;
+}
+
+.entry-money-row {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.entry-money-row .field[hidden] {
+  display: none;
+}
+
+.quick-form.is-payment .entry-money-row {
+  grid-template-columns: 1fr;
+}
+
 .money-input {
   align-items: center;
   background: #0d1017;
@@ -609,6 +676,10 @@ dialog::backdrop {
   .quick-actions,
   .utility-actions {
     flex-wrap: wrap;
+  }
+
+  .entry-money-row {
+    grid-template-columns: 1fr;
   }
 
   .entry-row {

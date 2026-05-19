@@ -59,26 +59,41 @@
         </div>
 
         <form id="quickForm" class="quick-form">
-          <label class="field">
+          <label class="field customer-search-field">
             <span>Customer</span>
-            <select id="quickCustomer" required></select>
-          </label>
-
-          <label class="field amount-field">
-            <span>Amount</span>
-            <div class="money-input">
-              <b>&pound;</b>
-              <input id="quickAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required />
+            <div class="customer-search">
+              <input
+                id="quickCustomer"
+                type="text"
+                autocomplete="off"
+                placeholder="Type 3+ characters to search"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="customerSuggestions"
+                required
+              />
+              <div id="customerSuggestions" class="suggestion-list" role="listbox" hidden></div>
             </div>
           </label>
 
-          <label class="field" id="paidNowField">
-            <span>Paid now</span>
-            <div class="money-input">
-              <b>&pound;</b>
-              <input id="quickPaidNow" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" />
-            </div>
-          </label>
+          <div class="entry-money-row">
+            <label class="field amount-field">
+              <span>Amount</span>
+              <div class="money-input">
+                <b>&pound;</b>
+                <input id="quickAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required />
+              </div>
+            </label>
+
+            <label class="field" id="paidNowField">
+              <span>Paid now</span>
+              <div class="money-input">
+                <b>&pound;</b>
+                <input id="quickPaidNow" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" />
+              </div>
+            </label>
+          </div>
 
           <div class="quick-actions">
             <button class="primary-button" type="submit">

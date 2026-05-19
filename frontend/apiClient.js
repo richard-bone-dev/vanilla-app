@@ -55,6 +55,10 @@
     return request("/api/customers");
   }
 
+  function searchCustomers(query) {
+    return request(`/api/customers/search?query=${encodeURIComponent(query)}`);
+  }
+
   async function getCustomer(customerId) {
     const ledger = await getCustomerLedger(customerId);
     return ledger.customer;
@@ -129,5 +133,6 @@
     getLedgerEntries,
     recordPayment,
     recordSale,
+    searchCustomers,
   };
 })();
