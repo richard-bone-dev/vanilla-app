@@ -2,7 +2,7 @@
 
 A dark, local-first prototype for recording simple customer sales and payments.
 
-Run the local static server when testing API calls:
+Run the local static server:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\serve.ps1
@@ -10,7 +10,9 @@ powershell -ExecutionPolicy Bypass -File .\serve.ps1
 
 Then open `http://localhost:5173`.
 
-Open `index.html` directly only for UI-only checks. The app stores data in the browser's local storage.
+Do not open `index.html` directly with `file://`; the demo UI is intended to run over HTTP at `localhost:5173`. The app stores data in the browser's local storage.
+
+If a browser still has an old service worker registered for `localhost:5173`, unregister it in DevTools under `Application > Service Workers`, then reload `http://localhost:5173/index.html`.
 
 The API base URL is configured in `config.js`:
 

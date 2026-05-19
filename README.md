@@ -63,13 +63,7 @@ Then open:
 http://localhost:5173
 ```
 
-For UI-only checks, the frontend can also be opened directly:
-
-```powershell
-Start-Process .\frontend\index.html
-```
-
-Direct file opening may not use the same browser origin as the API CORS configuration, so use the local static server when testing API calls.
+Do not open `frontend/index.html` directly with `file://`; the demo UI is intended to run over HTTP at `localhost:5173`.
 
 The frontend URL is:
 
@@ -89,6 +83,8 @@ Useful local endpoints:
 - OpenAPI: `http://localhost:12345/openapi/v1.json`
 - Scalar: `http://localhost:12345/scalar/v1`
 - Health: `http://localhost:12345/health`
+
+If a browser still has an old service worker registered for `localhost:5173`, unregister it in DevTools under `Application > Service Workers`, then reload `http://localhost:5173/index.html`.
 
 ## Docs and health
 
