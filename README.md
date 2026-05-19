@@ -85,6 +85,20 @@ Useful local endpoints:
 - Scalar: `http://localhost:12345/scalar/v1`
 - Health: `http://localhost:12345/health`
 
+Frontend data endpoints used by the static app:
+
+- `GET /api/customers`
+- `POST /api/customers`
+- `GET /api/customers/{id}/ledger`
+- `DELETE /api/customers/{customerId}`
+- `GET /api/ledger/entries`
+- `POST /api/orders`
+- `POST /api/payments`
+- `GET /api/dashboard/summary`
+- `DELETE /api/ledger`
+
+`DELETE /api/customers/{customerId}` is the settled-customer cleanup endpoint used after a payment. It validates the customer, calculates the active balance server-side, and only deletes when the balance is zero or less. It returns `204 No Content` on success, `404 Not Found` for a missing customer, `409 Conflict` when the balance is still positive, and `400 Bad Request` for invalid IDs.
+
 If a browser still has an old service worker registered for `localhost:5173`, first open `http://localhost:5173/sw-reset.html`. If the old worker still blocks navigation, unregister it in DevTools under `Application > Service Workers`, then hard reload `http://localhost:5173/index.html`.
 
 ## Docs and health

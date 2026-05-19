@@ -1,6 +1,6 @@
 # Corner Ledger
 
-A dark, local-first prototype for recording simple customer sales and payments.
+A dark static frontend for recording simple customer sales and payments through `Vanilla.Api`.
 
 Run the local static server:
 
@@ -11,7 +11,7 @@ powershell -ExecutionPolicy Bypass -File .\serve.ps1
 
 Then open `http://localhost:5173`.
 
-Do not open `index.html` directly with `file://`; the demo UI is intended to run over HTTP at `localhost:5173`. The app stores data in the browser's local storage.
+Do not open `index.html` directly with `file://`; the demo UI is intended to run over HTTP at `localhost:5173`. Customer and ledger data is loaded from the API, not browser storage.
 
 If a browser still has an old service worker registered for `localhost:5173`, first open `http://localhost:5173/sw-reset.html`. If the old worker still blocks navigation, unregister it in DevTools under `Application > Service Workers`, then hard reload `http://localhost:5173/index.html`.
 
@@ -21,7 +21,7 @@ The API base URL is configured in `config.js`:
 window.VANILLA_API_BASE_URL = "http://localhost:12345";
 ```
 
-The app can check `http://localhost:12345/health` from the full settings view.
+The app uses `http://localhost:12345/health`, `/api/customers`, `/api/customers/{id}/ledger`, `/api/ledger/entries`, `/api/orders`, `/api/payments`, `/api/dashboard/summary`, and the settled-customer `DELETE /api/customers/{customerId}` endpoint from the full settings and quick-entry views.
 
 ## What it does
 
@@ -35,5 +35,4 @@ The app can check `http://localhost:12345/health` from the full settings view.
 ## Current limits
 
 - No stock or product catalogue yet.
-- No cloud sync or multi-device data sharing yet.
 - No user accounts or permissions yet.

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 
 namespace Vanilla.Api.Tests;
 
@@ -58,6 +59,65 @@ public sealed class SettlementTests
         dashboard.ActiveOrderTotal.Should().Be(0m);
         dashboard.ActivePaymentTotal.Should().Be(0m);
         dashboard.OutstandingBalance.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task Delete_customer_succeeds_when_balance_is_zero_or_less_and_deletes_related_records()
+    {
+        await using var factory = new TestApiFactory();
+        var customerId = await SeedCustomerWithEntriesAsync(factory, 20m, 25m);
+        var client = factory.CreateClient();
+
+        var response = await client.DeleteAsync($"/api/customers/{customerId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var deletedState = factory.Query(dbContext => new
+        {
+            Customers = dbContext.Customers.IgnoreQueryFilters().Count(customer => customer.Id == customerId),
+            Orders = dbContext.Orders.IgnoreQueryFilters().Count(order => order.CustomerId == customerId),
+            Payments = dbContext.Payments.IgnoreQueryFilters().Count(payment => payment.CustomerId == customerId)
+        });
+        deletedState.Customers.Should().Be(0);
+        deletedState.Orders.Should().Be(0);
+        deletedState.Payments.Should().Be(0);
+
+        var customers = await client.GetFromJsonAsync<List<CustomerSummaryResponse>>("/api/customers");
+        var entries = await client.GetFromJsonAsync<List<LedgerEntryListItem>>("/api/ledger/entries");
+
+        customers.Should().BeEmpty();
+        entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Delete_customer_returns_conflict_when_balance_is_positive()
+    {
+        await using var factory = new TestApiFactory();
+        var customerId = await SeedCustomerWithEntriesAsync(factory, 20m, 5m);
+        var client = factory.CreateClient();
+
+        var response = await client.DeleteAsync($"/api/customers/{customerId}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var payload = await response.Content.ReadFromJsonAsync<SettlementBlockedResponse>();
+        payload!.ActiveBalance.Should().Be(15m);
+
+        factory.Query(dbContext => dbContext.Customers.Count(customer => customer.Id == customerId)).Should().Be(1);
+        factory.Query(dbContext => dbContext.Orders.Count(order => order.CustomerId == customerId)).Should().Be(1);
+        factory.Query(dbContext => dbContext.Payments.Count(payment => payment.CustomerId == customerId)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Delete_customer_returns_not_found_or_bad_request_for_invalid_targets()
+    {
+        await using var factory = new TestApiFactory();
+        var client = factory.CreateClient();
+
+        var missing = await client.DeleteAsync($"/api/customers/{Guid.NewGuid()}");
+        var invalid = await client.DeleteAsync("/api/customers/not-a-guid");
+
+        missing.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        invalid.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     private static async Task<Guid> SeedCustomerWithEntriesAsync(TestApiFactory factory, decimal orderAmount, decimal paymentAmount)

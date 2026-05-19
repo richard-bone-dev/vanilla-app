@@ -21,6 +21,18 @@ public static class Endpoints
 
         var group = endpoints.MapGroup("/api");
 
+        group.MapGet("/customers", async (
+            LedgerApplicationService service,
+            CancellationToken cancellationToken) =>
+        {
+            var results = await service.GetCustomersAsync(cancellationToken);
+            return Results.Ok(results);
+        })
+            .WithName("GetCustomers")
+            .WithTags("Customers")
+            .WithSummary("Lists active customers with current balances.")
+            .Produces<IReadOnlyList<CustomerSummaryResponse>>(StatusCodes.Status200OK);
+
         group.MapGet("/customers/search", async (
             string? query,
             LedgerApplicationService service,
@@ -53,7 +65,7 @@ public static class Endpoints
         })
             .WithName("CreateCustomer")
             .WithTags("Customers")
-            .WithSummary("Creates a new customer.")
+            .WithSummary("Creates a new customer with an optional opening balance.")
             .Accepts<CreateCustomerRequest>("application/json")
             .Produces<CustomerSummaryResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem(StatusCodes.Status400BadRequest);
@@ -71,6 +83,43 @@ public static class Endpoints
             .WithSummary("Gets a customer's ledger history.")
             .Produces<CustomerLedgerResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound);
+
+        group.MapDelete("/customers/{customerId}", async (
+            Guid customerId,
+            LedgerApplicationService service,
+            CancellationToken cancellationToken) =>
+        {
+            if (customerId == Guid.Empty)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["customerId"] = ["Customer id must be a valid non-empty GUID."]
+                });
+            }
+
+            var result = await service.DeleteCustomerIfSettledAsync(customerId, cancellationToken);
+            if (result.IsNotFound)
+            {
+                return Results.NotFound();
+            }
+
+            if (result.ActiveBalance is not null)
+            {
+                return Results.Conflict(new SettlementBlockedResponse(
+                    "Customer can only be deleted when the active balance is zero or less.",
+                    result.ActiveBalance.Value));
+            }
+
+            return Results.NoContent();
+        })
+            .WithName("DeleteCustomer")
+            .WithTags("Customers")
+            .WithSummary("Deletes a settled customer and related orders and payments.")
+            .WithDescription("Deletes the customer, orders, and payments in one transaction. The customer must have a server-calculated balance of zero or less.")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesValidationProblem(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces<SettlementBlockedResponse>(StatusCodes.Status409Conflict);
 
         group.MapPost("/orders", async (
             CreateOrderRequest request,
@@ -105,6 +154,18 @@ public static class Endpoints
             .Produces<CreatedEntryEnvelope>(StatusCodes.Status201Created)
             .ProducesValidationProblem(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);
+
+        group.MapGet("/ledger/entries", async (
+            LedgerApplicationService service,
+            CancellationToken cancellationToken) =>
+        {
+            var entries = await service.GetLedgerEntriesAsync(cancellationToken);
+            return Results.Ok(entries);
+        })
+            .WithName("GetLedgerEntries")
+            .WithTags("Entries")
+            .WithSummary("Lists active order and payment ledger entries.")
+            .Produces<IReadOnlyList<LedgerEntryListItem>>(StatusCodes.Status200OK);
 
         group.MapPost("/quick-entry", async (
             QuickEntryRequest request,
@@ -170,6 +231,18 @@ public static class Endpoints
             .WithTags("Dashboard")
             .WithSummary("Gets the dashboard summary totals.")
             .Produces<DashboardSummaryResponse>(StatusCodes.Status200OK);
+
+        group.MapDelete("/ledger", async (
+            LedgerApplicationService service,
+            CancellationToken cancellationToken) =>
+        {
+            var response = await service.ClearLedgerDataAsync(cancellationToken);
+            return Results.Ok(response);
+        })
+            .WithName("ClearLedgerData")
+            .WithTags("Entries")
+            .WithSummary("Soft-deletes all active customers and ledger entries.")
+            .Produces<ClearLedgerDataResponse>(StatusCodes.Status200OK);
 
         return endpoints;
     }

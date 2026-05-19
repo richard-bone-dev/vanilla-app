@@ -1,14 +1,12 @@
-const STORAGE_KEY = "corner-ledger:v1";
-
-const starterData = {
-  customers: [
-    { id: makeId(), name: "Cash customer", openingBalance: 0 },
-    { id: makeId(), name: "A. Carter", openingBalance: 24.5 },
-  ],
+const state = {
+  customers: [],
   entries: [],
+  summary: emptySummary(),
+  loading: true,
+  mutating: false,
+  error: "",
 };
 
-const state = loadState();
 let mode = "sale";
 let activeFilter = "all";
 
@@ -43,6 +41,7 @@ const els = {
   quickCustomer: document.querySelector("#quickCustomer"),
   quickForm: document.querySelector("#quickForm"),
   quickPaidNow: document.querySelector("#quickPaidNow"),
+  quickSubmit: document.querySelector("#quickForm button[type='submit']"),
   quickTitle: document.querySelector("#quickTitle"),
   selectedCustomerBalance: document.querySelector("#selectedCustomerBalance"),
   selectedCustomerName: document.querySelector("#selectedCustomerName"),
@@ -50,33 +49,9 @@ const els = {
   submitLabel: document.querySelector("#submitLabel"),
 };
 
-seedIfEmpty();
 bindEvents();
 render();
-
-function loadState() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) return structuredClone(starterData);
-    const parsed = JSON.parse(saved);
-    return {
-      customers: Array.isArray(parsed.customers) ? parsed.customers : [],
-      entries: Array.isArray(parsed.entries) ? parsed.entries : [],
-    };
-  } catch {
-    return structuredClone(starterData);
-  }
-}
-
-function seedIfEmpty() {
-  if (state.customers.length > 0) return;
-  state.customers = structuredClone(starterData.customers);
-  saveState();
-}
-
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
+loadData();
 
 function bindEvents() {
   document.querySelectorAll(".mode-option").forEach((button) => {
@@ -111,6 +86,40 @@ function bindEvents() {
   });
 }
 
+async function loadData({ preserveCustomerId = els.quickCustomer.value, quiet = false } = {}) {
+  state.loading = true;
+  state.error = "";
+  render(preserveCustomerId);
+
+  if (!quiet) {
+    setApiStatus("Loading API data...");
+  }
+
+  try {
+    const [customers, entries, summary] = await Promise.all([
+      window.vanillaApi.getCustomers(),
+      window.vanillaApi.getLedgerEntries(),
+      window.vanillaApi.getDashboardSummary(),
+    ]);
+
+    state.customers = normalizeCustomers(customers);
+    state.entries = normalizeEntries(entries);
+    state.summary = normalizeSummary(summary);
+    state.loading = false;
+    state.error = "";
+    render(preserveCustomerId);
+    setApiStatus("Connected to API", "healthy");
+  } catch (error) {
+    state.customers = [];
+    state.entries = [];
+    state.summary = emptySummary();
+    state.loading = false;
+    state.error = errorMessage(error);
+    render(preserveCustomerId);
+    setApiStatus(`Unable to load API data: ${state.error}`, "unhealthy");
+  }
+}
+
 function setMode(nextMode) {
   mode = nextMode;
   els.quickTitle.textContent = mode === "sale" ? "Sale" : "Payment";
@@ -121,9 +130,10 @@ function setMode(nextMode) {
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-selected", String(active));
   });
+  renderControls();
 }
 
-function recordQuickEntry(event) {
+async function recordQuickEntry(event) {
   event.preventDefault();
   const customerId = els.quickCustomer.value;
   const amount = toMoney(els.quickAmount.value);
@@ -131,65 +141,84 @@ function recordQuickEntry(event) {
 
   if (!customerId || amount <= 0) return;
 
-  const now = new Date().toISOString();
-  const batchId = makeId();
+  state.mutating = true;
+  renderControls();
+  setApiStatus(mode === "sale" ? "Recording sale..." : "Recording payment...");
 
-  if (mode === "sale") {
-    state.entries.unshift({
-      id: makeId(),
-      batchId,
-      customerId,
-      type: "sale",
-      amount,
-      createdAt: now,
-    });
+  try {
+    let deletedCustomer = false;
 
-    if (paidNow > 0) {
-      state.entries.unshift({
-        id: makeId(),
-        batchId,
-        customerId,
-        type: "payment",
-        amount: paidNow,
-        createdAt: now,
-        note: "Paid at sale",
-      });
+    if (mode === "sale") {
+      await window.vanillaApi.recordSale({ customerId, amount, paidNow });
+      if (paidNow > 0) {
+        deletedCustomer = await promptDeleteIfSettled(customerId);
+      }
+    } else {
+      await window.vanillaApi.recordPayment({ customerId, amount });
+      deletedCustomer = await promptDeleteIfSettled(customerId);
     }
-  } else {
-    state.entries.unshift({
-      id: makeId(),
-      customerId,
-      type: "payment",
-      amount,
-      createdAt: now,
-    });
-  }
 
-  saveState();
-  els.quickForm.reset();
-  els.quickCustomer.value = customerId;
-  render();
-  els.quickAmount.focus();
+    els.quickForm.reset();
+    if (!deletedCustomer) {
+      await loadData({ preserveCustomerId: customerId, quiet: true });
+      if (getCustomer(customerId)) {
+        els.quickCustomer.value = customerId;
+      }
+      renderSelectedCustomer();
+    }
+
+    setApiStatus(deletedCustomer ? "Settled customer deleted from API" : "Entry saved to API", "healthy");
+    els.quickAmount.focus();
+  } catch (error) {
+    setApiStatus(errorMessage(error), "unhealthy");
+  } finally {
+    state.mutating = false;
+    renderControls();
+  }
 }
 
-function saveCustomer(event) {
+async function promptDeleteIfSettled(customerId) {
+  const customer = await window.vanillaApi.getCustomer(customerId);
+  const balance = toNumber(customer?.currentBalance ?? customer?.balance);
+
+  if (balance > 0) return false;
+
+  const confirmed = confirm(
+    "This customer is now settled. Delete the customer and all their sales/payments?",
+  );
+
+  if (!confirmed) return false;
+
+  await window.vanillaApi.deleteCustomer(customerId);
+  await loadData({ preserveCustomerId: "", quiet: true });
+  return true;
+}
+
+async function saveCustomer(event) {
   event.preventDefault();
   const name = els.customerName.value.trim();
   if (!name) return;
 
-  const customer = {
-    id: makeId(),
-    name,
-    openingBalance: toMoney(els.openingBalance.value),
-  };
+  state.mutating = true;
+  renderControls();
+  setApiStatus("Saving customer...");
 
-  state.customers.push(customer);
-  state.customers.sort((a, b) => a.name.localeCompare(b.name));
-  saveState();
-  closeCustomerDialog();
-  render();
-  els.quickCustomer.value = customer.id;
-  renderSelectedCustomer();
+  try {
+    const customer = await window.vanillaApi.createCustomer({
+      name,
+      openingBalance: toMoney(els.openingBalance.value),
+    });
+
+    closeCustomerDialog();
+    els.customerForm.reset();
+    await loadData({ preserveCustomerId: customer.id, quiet: true });
+    setApiStatus("Customer saved to API", "healthy");
+  } catch (error) {
+    setApiStatus(errorMessage(error), "unhealthy");
+  } finally {
+    state.mutating = false;
+    renderControls();
+  }
 }
 
 function openCustomerDialog() {
@@ -213,45 +242,63 @@ function closeFullApp() {
 }
 
 function exportData() {
-  els.exportBox.value = JSON.stringify(state, null, 2);
+  els.exportBox.value = JSON.stringify(
+    {
+      source: window.vanillaApi.apiBaseUrl(),
+      exportedAt: new Date().toISOString(),
+      summary: state.summary,
+      customers: state.customers,
+      entries: state.entries,
+    },
+    null,
+    2,
+  );
   els.exportBox.focus();
   els.exportBox.select();
 }
 
 async function checkApiHealth() {
-  els.apiStatus.textContent = "Checking...";
-  els.apiStatus.className = "api-status";
+  setApiStatus("Checking...");
 
   try {
     const health = await window.vanillaApi.getHealth();
-    els.apiStatus.textContent = health;
-    els.apiStatus.classList.add("is-healthy");
+    setApiStatus(typeof health === "string" ? health : "Healthy", "healthy");
   } catch (error) {
-    els.apiStatus.textContent = error.message || "API unavailable";
-    els.apiStatus.classList.add("is-unhealthy");
+    setApiStatus(errorMessage(error), "unhealthy");
   }
 }
 
-function clearData() {
-  const confirmed = confirm("Clear all customers and ledger entries?");
+async function clearData() {
+  const confirmed = confirm("Clear all customers and ledger entries from the API?");
   if (!confirmed) return;
 
-  state.customers = structuredClone(starterData.customers);
-  state.entries = [];
-  saveState();
-  render();
-  els.exportBox.value = "";
+  state.mutating = true;
+  renderControls();
+  setApiStatus("Clearing API data...");
+
+  try {
+    const result = await window.vanillaApi.clearLedgerData();
+    els.exportBox.value = "";
+    await loadData({ preserveCustomerId: "", quiet: true });
+    setApiStatus(`Cleared ${result.totalRowsSoftDeleted ?? 0} rows from API`, "healthy");
+  } catch (error) {
+    setApiStatus(errorMessage(error), "unhealthy");
+  } finally {
+    state.mutating = false;
+    renderControls();
+  }
 }
 
-function render() {
+function render(preferredCustomerId = els.quickCustomer.value) {
   renderApiConfig();
-  renderCustomerOptions();
+  renderCustomerOptions(preferredCustomerId);
   renderSelectedCustomer();
   renderMetrics();
   renderCustomers();
   renderEntries();
   renderFilters();
   setMode(mode);
+  renderControls();
   refreshIcons();
 }
 
@@ -261,31 +308,44 @@ function renderApiConfig() {
   }
 }
 
-function renderCustomerOptions() {
-  const current = els.quickCustomer.value;
-  els.quickCustomer.replaceChildren(
-    ...state.customers.map((customer) => {
-      const option = document.createElement("option");
-      option.value = customer.id;
-      option.textContent = customer.name;
-      return option;
-    }),
-  );
-
-  if (state.customers.some((customer) => customer.id === current)) {
-    els.quickCustomer.value = current;
-  }
-}
-
-function renderSelectedCustomer() {
-  const customer = getCustomer(els.quickCustomer.value) ?? state.customers[0];
-  if (!customer) {
-    els.selectedCustomerName.textContent = "No customer";
-    els.selectedCustomerBalance.textContent = currency(0);
+function renderCustomerOptions(preferredCustomerId = els.quickCustomer.value) {
+  if (state.loading) {
+    els.quickCustomer.replaceChildren(optionFor("", "Loading customers..."));
     return;
   }
 
-  els.quickCustomer.value = customer.id;
+  if (state.customers.length === 0) {
+    els.quickCustomer.replaceChildren(optionFor("", "Add a customer first"));
+    return;
+  }
+
+  els.quickCustomer.replaceChildren(
+    ...state.customers.map((customer) => optionFor(customer.id, customer.name)),
+  );
+
+  const selectedId = state.customers.some((customer) => customer.id === preferredCustomerId)
+    ? preferredCustomerId
+    : state.customers[0].id;
+  els.quickCustomer.value = selectedId;
+}
+
+function optionFor(value, label) {
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label;
+  return option;
+}
+
+function renderSelectedCustomer() {
+  const customer = getCustomer(els.quickCustomer.value);
+  if (!customer) {
+    els.selectedCustomerName.textContent = state.loading ? "Loading customers" : "No customer";
+    els.selectedCustomerBalance.textContent = currency(0);
+    els.selectedCustomerStatus.textContent = "settled";
+    els.selectedCustomerStatus.classList.remove("owed");
+    return;
+  }
+
   const balance = getBalance(customer.id);
   els.selectedCustomerName.textContent = customer.name;
   els.selectedCustomerBalance.textContent = currency(balance);
@@ -294,28 +354,30 @@ function renderSelectedCustomer() {
 }
 
 function renderMetrics() {
-  const totals = state.entries.reduce(
-    (acc, entry) => {
-      acc[entry.type] += entry.amount;
-      return acc;
-    },
-    { sale: 0, payment: 0 },
-  );
-  const outstanding = state.customers.reduce((sum, customer) => sum + getBalance(customer.id), 0);
   const todayKey = new Date().toDateString();
   const todaySales = state.entries
     .filter((entry) => entry.type === "sale" && new Date(entry.createdAt).toDateString() === todayKey)
     .reduce((sum, entry) => sum + entry.amount, 0);
 
-  els.heroOutstanding.textContent = currency(outstanding);
-  els.heroCustomers.textContent = String(state.customers.length);
+  els.heroOutstanding.textContent = currency(state.summary.outstandingBalance);
+  els.heroCustomers.textContent = String(state.summary.activeCustomerCount);
   els.heroToday.textContent = currency(todaySales);
-  els.metricOutstanding.textContent = currency(outstanding);
-  els.metricSales.textContent = currency(totals.sale);
-  els.metricPayments.textContent = currency(totals.payment);
+  els.metricOutstanding.textContent = currency(state.summary.outstandingBalance);
+  els.metricSales.textContent = currency(state.summary.activeOrderTotal);
+  els.metricPayments.textContent = currency(state.summary.activePaymentTotal);
 }
 
 function renderCustomers() {
+  if (state.loading) {
+    els.customerList.innerHTML = '<p class="empty-state">Loading customers from API...</p>';
+    return;
+  }
+
+  if (state.error) {
+    els.customerList.innerHTML = `<p class="empty-state">Could not load customers. ${escapeHtml(state.error)}</p>`;
+    return;
+  }
+
   if (state.customers.length === 0) {
     els.customerList.innerHTML = '<p class="empty-state">Add a customer to start recording money.</p>';
     return;
@@ -329,7 +391,7 @@ function renderCustomers() {
       row.innerHTML = `
         <div>
           <strong>${escapeHtml(customer.name)}</strong>
-          <p class="subtext">Opening ${currency(customer.openingBalance)}</p>
+          <p class="subtext">Current balance from API</p>
         </div>
         <strong class="${balance > 0 ? "amount-positive" : "amount-negative"}">${currency(balance)}</strong>
       `;
@@ -339,6 +401,16 @@ function renderCustomers() {
 }
 
 function renderEntries() {
+  if (state.loading) {
+    els.entryList.innerHTML = '<p class="empty-state">Loading ledger entries from API...</p>';
+    return;
+  }
+
+  if (state.error) {
+    els.entryList.innerHTML = `<p class="empty-state">Could not load ledger entries. ${escapeHtml(state.error)}</p>`;
+    return;
+  }
+
   const entries = activeFilter === "all" ? state.entries : state.entries.filter((entry) => entry.type === activeFilter);
   if (entries.length === 0) {
     els.entryList.innerHTML = '<p class="empty-state">No ledger entries yet.</p>';
@@ -353,7 +425,7 @@ function renderEntries() {
       row.innerHTML = `
         <span class="entry-icon"><i data-lucide="${entry.type === "sale" ? "receipt-text" : "banknote"}"></i></span>
         <div>
-          <strong>${escapeHtml(customer?.name ?? "Unknown customer")}</strong>
+          <strong>${escapeHtml(customer?.name ?? entry.customerName ?? "Unknown customer")}</strong>
           <p class="subtext">${labelForEntry(entry)} &middot; ${formatDate(entry.createdAt)}</p>
         </div>
         <strong class="${entry.type === "sale" ? "amount-positive" : "amount-negative"}">
@@ -372,17 +444,91 @@ function renderFilters() {
   });
 }
 
+function renderControls() {
+  const busy = state.loading || state.mutating;
+  const noCustomers = state.customers.length === 0;
+  els.quickCustomer.disabled = busy || noCustomers;
+  els.quickAmount.disabled = busy || noCustomers;
+  els.quickPaidNow.disabled = busy || noCustomers || mode !== "sale";
+  els.quickSubmit.disabled = busy || noCustomers;
+  els.addCustomer.disabled = busy;
+  els.newCustomerQuick.disabled = busy;
+  els.exportData.disabled = busy;
+  els.clearData.disabled = busy || (state.customers.length === 0 && state.entries.length === 0);
+  els.checkApi.disabled = state.mutating;
+  els.customerName.disabled = state.mutating;
+  els.openingBalance.disabled = state.mutating;
+}
+
+function normalizeCustomers(customers) {
+  if (!Array.isArray(customers)) return [];
+
+  return customers
+    .map((customer) => ({
+      id: customer.id,
+      name: customer.name,
+      currentBalance: toNumber(customer.currentBalance),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function normalizeEntries(entries) {
+  if (!Array.isArray(entries)) return [];
+
+  return entries
+    .map((entry) => {
+      const entryType = String(entry.entryType || "").toLowerCase();
+      return {
+        id: entry.id,
+        customerId: entry.customerId,
+        customerName: entry.customerName,
+        type: entryType === "payment" ? "payment" : "sale",
+        amount: toNumber(entry.amount),
+        createdAt: entry.createdUtc,
+        note: entry.notes,
+      };
+    })
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function normalizeSummary(summary) {
+  return {
+    activeCustomerCount: toNumber(summary?.activeCustomerCount),
+    activeOrderTotal: toNumber(summary?.activeOrderTotal),
+    activePaymentTotal: toNumber(summary?.activePaymentTotal),
+    outstandingBalance: toNumber(summary?.outstandingBalance),
+  };
+}
+
+function emptySummary() {
+  return {
+    activeCustomerCount: 0,
+    activeOrderTotal: 0,
+    activePaymentTotal: 0,
+    outstandingBalance: 0,
+  };
+}
+
+function setApiStatus(message, status) {
+  els.apiStatus.textContent = message;
+  els.apiStatus.className = "api-status";
+  if (status) {
+    els.apiStatus.classList.add(`is-${status}`);
+  }
+}
+
 function getCustomer(customerId) {
   return state.customers.find((customer) => customer.id === customerId);
 }
 
 function getBalance(customerId) {
   const customer = getCustomer(customerId);
-  const openingBalance = customer?.openingBalance ?? 0;
+  if (customer) return customer.currentBalance;
+
   return state.entries.reduce((balance, entry) => {
     if (entry.customerId !== customerId) return balance;
     return entry.type === "sale" ? balance + entry.amount : balance - entry.amount;
-  }, openingBalance);
+  }, 0);
 }
 
 function labelForEntry(entry) {
@@ -394,6 +540,11 @@ function toMoney(value) {
   const number = Number.parseFloat(value);
   if (!Number.isFinite(number)) return 0;
   return Math.round(number * 100) / 100;
+}
+
+function toNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
 }
 
 function currency(value) {
@@ -413,7 +564,7 @@ function formatDate(value) {
 }
 
 function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, (char) => {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => {
     const entities = {
       "&": "&amp;",
       "<": "&lt;",
@@ -425,9 +576,8 @@ function escapeHtml(value) {
   });
 }
 
-function makeId() {
-  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
-  return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+function errorMessage(error) {
+  return error?.message || "API unavailable";
 }
 
 function refreshIcons() {
